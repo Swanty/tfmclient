@@ -13,7 +13,7 @@
 //#define USER_AGENT		"Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0"
 #define USER_AGENT		NAME " Linux Client " VERSION
 
-#define DEBUG
+//#define DEBUG // For NPAPI debug output
 
 #pragma pack(push, 1)
 typedef struct
