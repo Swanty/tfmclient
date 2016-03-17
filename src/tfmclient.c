@@ -10,14 +10,12 @@
 #include "utils.h"
 #include "npapi/npapi.h"
 
-#define URL	"http://www.transformice.com/TransformiceChargeur.swf"
-
 #define WIN_WIDTH		800
 #define WIN_HEIGHT		600
 
 #define WIN_POSITION	GTK_WIN_POS_CENTER
 
-#define FLASH_PLUGIN_SO	"/usr/lib/nsbrowser/plugins/libflashplayer.so"
+#define FLASH_PLUGIN_SO	"libflashplayer.so"
 
 extern char loader_data[]      asm("_binary_res_TransformiceChargeur_swf_start");
 extern char loader_data_end[]  asm("_binary_res_TransformiceChargeur_swf_end");
@@ -33,23 +31,49 @@ NPP instance; // Plugin instance
 char *iconPaths[] =
 {
 	"/usr/share/pixmaps",
+	"",
+	"res"
+}, *flashPlayerPaths[] =
+{
+#ifdef FLASH_SO_LOCATION
+	FLASH_SO_LOCATION,
+#endif
+	"/usr/lib/nsbrowser/plugins",
+	"/usr/lib/mozilla/plugins",
+	"~/.mozilla/plugins",
 	""
-};
+}, *flashPlayerArg;
+
+char *find_file(const char *name, char **paths, int path_col)
+{
+	int i;
+	for (i = 0; i < path_col; i++)
+	{
+		char *path = (char*)malloc(strlen(name)+strlen(paths[i])+2);
+		FILE *f;
+		sprintf(path, "%s/%s", paths[i], name);
+		if ((f = fopen(path, "r"))!=NULL)
+		{
+			fclose(f);
+			return path;
+		}
+		free(path);
+	}
+	return NULL;
+}
 
 GdkPixbuf *create_pixbuf(const gchar *filename)
 {
-	int i;
-	GdkPixbuf *pixbuf;
-	GError *error = NULL;
-	pixbuf = gdk_pixbuf_new_from_file(filename, &error);
-	for (i = 0; i < sizeof(iconPaths)/sizeof(char*); i++)
+	char *path = find_file(filename, iconPaths, sizeof(iconPaths)/sizeof(char*));
+	if (path)
 	{
-		char *path = (char*)malloc(strlen(filename)+strlen(iconPaths[i])+2);
-		sprintf(path, "%s/%s", iconPaths[i], filename);
-		pixbuf = gdk_pixbuf_new_from_file(path, NULL);
-		if (pixbuf) break;
+		GdkPixbuf *pixbuf;
+		GError *error = NULL;
+		pixbuf = gdk_pixbuf_new_from_file(path, &error);
+		free(path);
+		return pixbuf;
 	}
-	return pixbuf;
+	return NULL;
 }
 
 void *loadSymbol(void *handle, const char *sym)
@@ -171,9 +195,68 @@ gboolean keyReleased(GtkWidget *widget, GdkEventKey *event, gpointer user_data)
 
 static gboolean plug_removed_cb (GtkWidget *widget, gpointer data) { return TRUE; }
 
+void print_version()
+{
+	printf("%s %s by %s\n", NAME, VERSION, AUTHOR);
+}
+
+void print_help()
+{
+	print_version();
+	printf("Usage: %s [-vhf?] [--version] [--help] [--flash /flash/player/path.so]\n\nOptions:\n", pname);
+	printf("  --help (-h, -?)    - this help\n");
+	printf("  --version (-v)     - print version and exit\n");
+	printf("  --flash file (-f)  - try to use file as Flash Player library\n");
+	printf("\n");
+}
+
+#define CHK_ARG(arg, type, long, short)	(type==1?*arg==short:strcmp(long, arg)==0)
+
+void parse_args(int argc, char *argv[])
+{
+	int i;
+	pname = argv[0];
+	for (i = 1; i < argc; i++)
+	{
+		char *p = argv[i];
+		byte t = 0;
+		while (*p=='-')
+		{
+			t++;
+			p = p+1;
+		}
+		if (t < 1) perr("wrong argument '%s'", argv[i]);
+		while (TRUE)
+		{
+			if (!*p) break;
+			if (CHK_ARG(p, t, "version", 'v'))
+			{
+				print_version();
+				exit(0);
+			}
+			else if (CHK_ARG(p, t, "help", 'h') || (t==1 && *p=='?'))
+			{
+				print_help();
+				exit(0);
+			}
+			else if (CHK_ARG(p, t, "flash", 'f'))
+				if (i+1 < argc) flashPlayerArg = argv[++i];
+				else perr("no flash player path for '%s' argument", argv[i]);
+			else
+			{
+				perr("unknown argument '%s'", argv[i]);
+				if (!*p) break;
+				exit(0);
+			}
+			if (t==1) p = p+1;
+			else break;
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
-	void *flashPlugin;
+	void *flashPlugin = NULL;
 	NPError (*NP_Initialize)(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs);
 	NPError (*NP_Shutdown)();
 	NPSavedData *savedData;
@@ -190,11 +273,16 @@ int main(int argc, char *argv[])
 	NPStream *stream;
 	uint16_t stype;
 	NPObject object;
+	
+	GdkPixbuf *tfmIcon;
 
 	char *xargv[]= {"allowscriptaccess", "name", "quality", "wmode", "allowFullScreen", "width", "height", "scale"},
-		*xargm[]= {"always", "Transformice", "best", "direct", "true", "800", "600","exactfit"};
+		*xargm[]= {"always", "Transformice", "best", "direct", "true", "800", "600","exactfit"}, *flashLocation;
 
 	pname = argv[0];
+	flashPlayerArg = NULL;
+
+	parse_args(argc, argv);
 
 	gtk_init (&argc, &argv);
 	// GTK+ window
@@ -202,11 +290,27 @@ int main(int argc, char *argv[])
 	gtk_window_set_title(GTK_WINDOW(mainWindow), "Transformice");
 	gtk_widget_set_usize (mainWindow, WIN_WIDTH, WIN_HEIGHT);
 	gtk_window_set_position(GTK_WINDOW(mainWindow), WIN_POSITION);
-	gtk_window_set_icon(GTK_WINDOW(mainWindow), create_pixbuf("/usr/share/pixmaps/transformice.png"));
+	if ((tfmIcon = create_pixbuf("transformice.png"))!=NULL) gtk_window_set_icon(GTK_WINDOW(mainWindow), tfmIcon);
 	gtk_widget_realize(mainWindow);
 	fullscreen = FALSE;
 
-	if (!(flashPlugin = dlopen(FLASH_PLUGIN_SO, RTLD_LAZY | RTLD_LOCAL))) perr("cannot load %s: %s", FLASH_PLUGIN_SO, dlerror()); // Loading plugin
+	if (flashPlayerArg!=NULL)
+	{
+		FILE *f = fopen(flashPlayerArg, "r");
+		if (f==NULL) flashLocation = find_file(FLASH_PLUGIN_SO, flashPlayerPaths, sizeof(flashPlayerPaths)/sizeof(char*));
+		else
+		{
+			flashLocation = strdup(flashPlayerArg);
+			fclose(f);
+		}
+	}
+	else flashLocation = find_file(FLASH_PLUGIN_SO, flashPlayerPaths, sizeof(flashPlayerPaths)/sizeof(char*));
+
+	if (flashLocation==NULL) perr("Flash Player not found on your machine.\n" \
+		"Try install it, using package manager of your distribution, or download it from https://get.adobe.com/ru/flashplayer/, and install with instruction.\n" \
+		"If problem appears again, try specify --flash (-f) argument followed by path to your libflashplayer.so.");
+	else if (!(flashPlugin = dlopen(flashLocation, RTLD_LAZY | RTLD_LOCAL))) perr("cannot load file %s: %s", flashLocation, dlerror()); // Loading plugin
+	else free(flashLocation);
 
 	// Load functions
 	NP_Initialize = (NPError(*)(NPNetscapeFuncs* bFuncs, NPPluginFuncs* pFuncs))loadSymbol(flashPlugin, "NP_Initialize");
@@ -271,7 +375,7 @@ int main(int argc, char *argv[])
 	// Loading TransformiceChargeur.swf
 	stream = (NPStream*)malloc(sizeof(NPStream));
 
-	stream->url = strdup(URL);
+	stream->url = strdup("http://www.transformice.com/TransformiceChargeur.swf");
 	stream->ndata = 0;
 	stream->end = 99782;
 	stream->lastmodified = 1201822722;

@@ -6,12 +6,12 @@
 #ifndef TFMCLIENT_H
 #define TFMCLIENT_H
 
-#define NAME	"Transformice"
-#define VERSION	"0.1"
+#define NAME	"Transformice Linux Client"
+#define VERSION	"0.2"
 
 #define AUTHOR	"Distroman (editor700)"
 #define CONTACT	"editor700@gmail.com"
 
-#define RELEASE	"07.02.2016"
+#define RELEASE	"17.03.2016"
 
 #endif
