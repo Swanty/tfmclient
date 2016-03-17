@@ -8,7 +8,7 @@
 #include <gtk/gtk.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tfmcheat.h"
+#include "tfmclient.h"
 
 //#define USER_AGENT		"Mozilla/5.0 (X11; Linux x86_64; rv:38.0) Gecko/20100101 Firefox/38.0"
 #define USER_AGENT		NAME " Linux Client " VERSION
