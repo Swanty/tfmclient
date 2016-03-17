@@ -33,7 +33,7 @@ Makefile: ;
 
 $(EXECUTABLE): $(OBJECTS)
 	mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS) -Wl,--format=binary -Wl,$(RESOURCE_DIR)/TransformiceChargeur.swf -Wl,--format=default -m64
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $(LDFLAGS) -Wl,--format=binary -Wl,$(RESOURCE_DIR)/TransformiceChargeur.swf -Wl,--format=default -m$(shell getconf LONG_BIT)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(OBJ_DIR)
