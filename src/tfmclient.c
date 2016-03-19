@@ -40,7 +40,7 @@ char *iconPaths[] =
 	FLASH_SO_NAME,
 #endif
 	"libflashplayer.so",
-	"flashplayer-alternative.so"
+	"flashplugin-alternative.so"
 }, *flashPlayerPaths[] =
 {
 #ifdef FLASH_SO_LOCATION
