@@ -15,8 +15,6 @@
 
 #define WIN_POSITION	GTK_WIN_POS_CENTER
 
-#define FLASH_PLUGIN_SO	"libflashplayer.so"
-
 extern char loader_data[]      asm("_binary_res_TransformiceChargeur_swf_start");
 extern char loader_data_end[]  asm("_binary_res_TransformiceChargeur_swf_end");
 
@@ -33,38 +31,52 @@ char *iconPaths[] =
 	"/usr/share/pixmaps",
 	"",
 	"res"
+}, *iconNames[] =
+{
+	"transformice.png",
+}, *flashPlayerNames[] =
+{
+#ifdef FLASH_SO_NAME
+	FLASH_SO_NAME,
+#endif
+	"libflashplayer.so",
+	"flashplayer-alternative.so"
 }, *flashPlayerPaths[] =
 {
 #ifdef FLASH_SO_LOCATION
 	FLASH_SO_LOCATION,
 #endif
-	"/usr/lib/nsbrowser/plugins",
 	"/usr/lib/mozilla/plugins",
+	"/usr/lib/nsbrowser/plugins",
 	"~/.mozilla/plugins",
 	""
 }, *flashPlayerArg;
 
-char *find_file(const char *name, char **paths, int path_col)
+char *find_file(char *const *names, char *const *paths, int name_col, int path_col)
 {
 	int i;
 	for (i = 0; i < path_col; i++)
 	{
-		char *path = (char*)malloc(strlen(name)+strlen(paths[i])+2);
-		FILE *f;
-		sprintf(path, "%s/%s", paths[i], name);
-		if ((f = fopen(path, "r"))!=NULL)
+		int n;
+		for (n = 0; n < name_col; n++)
 		{
-			fclose(f);
-			return path;
+			char *path = (char*)malloc(strlen(names[n])+strlen(paths[i])+2);
+			FILE *f;
+			sprintf(path, "%s/%s", paths[i], names[n]);
+			if ((f = fopen(path, "r"))!=NULL)
+			{
+				fclose(f);
+				return path;
+			}
+			free(path);
 		}
-		free(path);
 	}
 	return NULL;
 }
 
-GdkPixbuf *create_pixbuf(const gchar *filename)
+GdkPixbuf *create_pixbuf()
 {
-	char *path = find_file(filename, iconPaths, sizeof(iconPaths)/sizeof(char*));
+	char *path = find_file(iconNames, iconPaths, sizeof(iconNames)/sizeof(char*), sizeof(iconPaths)/sizeof(char*));
 	if (path)
 	{
 		GdkPixbuf *pixbuf;
@@ -204,9 +216,9 @@ void print_help()
 {
 	print_version();
 	printf("Usage: %s [-vhf?] [--version] [--help] [--flash /flash/player/path.so]\n\nOptions:\n", pname);
-	printf("  --help (-h, -?)    - this help\n");
-	printf("  --version (-v)     - print version and exit\n");
-	printf("  --flash file (-f)  - try to use file as Flash Player library\n");
+	printf("  -h, -?, --help    - this help\n");
+	printf("  -v, --version     - print version and exit\n");
+	printf("  -f, --flash file  - try to use file as Flash Player library\n");
 	printf("\n");
 }
 
@@ -290,25 +302,51 @@ int main(int argc, char *argv[])
 	gtk_window_set_title(GTK_WINDOW(mainWindow), "Transformice");
 	gtk_widget_set_usize (mainWindow, WIN_WIDTH, WIN_HEIGHT);
 	gtk_window_set_position(GTK_WINDOW(mainWindow), WIN_POSITION);
-	if ((tfmIcon = create_pixbuf("transformice.png"))!=NULL) gtk_window_set_icon(GTK_WINDOW(mainWindow), tfmIcon);
+	if ((tfmIcon = create_pixbuf())!=NULL) gtk_window_set_icon(GTK_WINDOW(mainWindow), tfmIcon);
 	gtk_widget_realize(mainWindow);
 	fullscreen = FALSE;
 
 	if (flashPlayerArg!=NULL)
 	{
 		FILE *f = fopen(flashPlayerArg, "r");
-		if (f==NULL) flashLocation = find_file(FLASH_PLUGIN_SO, flashPlayerPaths, sizeof(flashPlayerPaths)/sizeof(char*));
+		if (f==NULL) flashLocation = find_file(flashPlayerNames, flashPlayerPaths, sizeof(flashPlayerNames)/sizeof(char*), sizeof(flashPlayerPaths)/sizeof(char*));
 		else
 		{
 			flashLocation = strdup(flashPlayerArg);
 			fclose(f);
 		}
 	}
-	else flashLocation = find_file(FLASH_PLUGIN_SO, flashPlayerPaths, sizeof(flashPlayerPaths)/sizeof(char*));
+	else flashLocation = find_file(flashPlayerNames, flashPlayerPaths, sizeof(flashPlayerNames)/sizeof(char*), sizeof(flashPlayerPaths)/sizeof(char*));
 
-	if (flashLocation==NULL) perr("Flash Player not found on your machine.\n" \
-		"Try install it, using package manager of your distribution, or download it from https://get.adobe.com/ru/flashplayer/, and install with instruction.\n" \
-		"If problem appears again, try specify --flash (-f) argument followed by path to your libflashplayer.so.");
+	if (flashLocation==NULL)
+	{
+		char *text = "Flash Player not found on your machine.\n" \
+			"Try install it, using package manager of your distribution, or download it from https://get.adobe.com/ru/flashplayer/, and install with instruction.\n" \
+			"If problem appears again, try specify --flash (-f) argument followed by path to your Flash Player shared object or recompile with FLASH_SO_LOCATION/FLASH_SO_NAME string definitions.\nFlash Player searches in following places:\n",
+			*msg = malloc(strlen(text)+1), *ts;
+		int i, len = strlen(text);
+		msg[0] = 0;
+		sprintf(msg, text);
+		for (i = 0; i < sizeof(flashPlayerPaths)/sizeof(char*); i++)
+		{
+			msg = realloc(msg, (len+=strlen(flashPlayerPaths[i])+3));
+			ts = strdup(msg);
+			sprintf(msg, "%s\t%s\n", ts, flashPlayerPaths[i]);
+			free(ts);
+		}
+		text = "And by following file names:\n";
+		msg = realloc(msg, (len+=strlen(text)+1));
+		strcat(msg, text);
+		for (i = 0; i < sizeof(flashPlayerNames)/sizeof(char*); i++)
+		{
+			msg = realloc(msg, (len+=strlen(flashPlayerNames[i])+3));
+			ts = strdup(msg);
+			sprintf(msg, "%s\t%s\n", ts, flashPlayerNames[i]);
+			free(ts);
+		}
+		msg[len-1] = 0;
+		perr(msg);
+	}
 	else if (!(flashPlugin = dlopen(flashLocation, RTLD_LAZY | RTLD_LOCAL))) perr("cannot load file %s: %s", flashLocation, dlerror()); // Loading plugin
 	else free(flashLocation);
 
