@@ -153,7 +153,13 @@ NPError NPN_GetURLNotify(NPP instance, const char* url, const char* window, void
 			int pos = 0;
 			int size;
 			char buf[256];
-			sprintf(buf, "%lX__flashplugin_unique__", (intptr_t)instance);
+			sprintf(buf,
+#ifdef __i386__
+			"%X__flashplugin_unique__",
+#else
+			"%lX__flashplugin_unique__",
+#endif
+			(intptr_t)instance);
 			size = (int)strlen(buf);
 			s.end = size;
 			while(pos < size)

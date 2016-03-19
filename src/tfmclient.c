@@ -326,7 +326,7 @@ int main(int argc, char *argv[])
 			*msg = malloc(strlen(text)+1), *ts;
 		int i, len = strlen(text);
 		msg[0] = 0;
-		sprintf(msg, text);
+		sprintf(msg, "%s", text);
 		for (i = 0; i < sizeof(flashPlayerPaths)/sizeof(char*); i++)
 		{
 			msg = realloc(msg, (len+=strlen(flashPlayerPaths[i])+3));
