@@ -167,7 +167,7 @@ static void destroy(GtkWidget *widget, gpointer data) { gtk_main_quit(); }
 void winChanged(GtkWindow *window, GdkEventConfigure *e, gpointer data)
 {
 	npwin->width = e->width;
-	npwin->height = e->height;
+	npwin->height = e->height*2-600;
 	pFuncs.setwindow(instance, npwin);
 }
 
